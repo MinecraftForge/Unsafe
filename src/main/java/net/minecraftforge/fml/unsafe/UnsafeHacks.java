@@ -97,5 +97,6 @@ public class UnsafeHacks
     {
         findField(Class.class, "enumConstantDirectory").ifPresent(f -> setField(f, enumClass, null));
         findField(Class.class, "enumConstants").ifPresent(f -> setField(f, enumClass, null));
+        findField(Class.class, "enumVars").ifPresent(f -> setField(f, enumClass, null));//Open J9
     }
 }
