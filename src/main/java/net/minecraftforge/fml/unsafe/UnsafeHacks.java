@@ -19,9 +19,13 @@
 
 package net.minecraftforge.fml.unsafe;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandleProxies;
+import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
 import java.util.Optional;
 
+import static java.lang.invoke.MethodType.methodType;
 import sun.misc.Unsafe;
 
 @SuppressWarnings("restriction")
@@ -40,6 +44,88 @@ public class UnsafeHacks
         {
             throw new RuntimeException("BARF!", e);
         }
+    }
+
+    public static <V> FieldAccess<V> findField(MethodHandles.Lookup lookup, Class<?> clazz, String name, Class<?> fieldType) throws NoSuchFieldException, IllegalAccessException
+    {
+        MethodHandle getter = lookup.findGetter(clazz, name, fieldType);
+        return getFieldAccess(getter, false);
+    }
+
+    public static <V> FieldAccess<V> findStaticField(MethodHandles.Lookup lookup, Class<?> clazz, String name, Class<V> fieldType) throws NoSuchFieldException, IllegalAccessException
+    {
+        return getFieldAccess(lookup.findStaticGetter(clazz, name, fieldType), true);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <V> FieldAccess<V> getFieldAccess(MethodHandle getter, boolean isStatic)
+    {
+        if (isStatic)
+        {
+            getter = MethodHandles.dropArguments(getter, 0, Object.class);
+        }
+        getter = getter.asType(methodType(Object.class, Object.class));
+
+        return MethodHandleProxies.asInterfaceInstance(FieldAccess.class, getter);
+    }
+
+    public static <R> MethodAccess<R> findMethod(MethodHandles.Lookup lookup, Class<?> clazz, String name, Class<R> returnType, Class<?>... argumentTypes) throws NoSuchMethodException, IllegalAccessException
+    {
+        return getMethodAccess(lookup.findVirtual(clazz, name, methodType(returnType, argumentTypes)), false);
+    }
+
+    public static <R> MethodAccess<R> findStaticMethod(MethodHandles.Lookup lookup, Class<?> clazz, String name, Class<R> returnType, Class<?>... argumentTypes) throws NoSuchMethodException, IllegalAccessException
+    {
+        return getMethodAccess(lookup.findStatic(clazz, name, methodType(returnType, argumentTypes)), true);
+    }
+
+    public static <T> MethodAccess<T> findConstructor(MethodHandles.Lookup lookup, Class<T> clazz, Class<?>... argumentTypes) throws NoSuchMethodException, IllegalAccessException
+    {
+        return getMethodAccess(lookup.findConstructor(clazz, methodType(void.class, argumentTypes)), true);
+    }
+
+    private static Object methodAccessBouncer(MethodHandle mh, Object[] args, Object instance) throws Throwable
+    {
+        return mh.invokeExact(instance, args);
+    }
+
+    private static final MethodHandle METHOD_ACCESS_BOUNCER;
+    static {
+        try
+        {
+            METHOD_ACCESS_BOUNCER = MethodHandles.lookup().findStatic(
+                    UnsafeHacks.class, "methodAccessBouncer",
+                    methodType(Object.class, MethodHandle.class, Object[].class, Object.class)
+            );
+        }
+        catch (NoSuchMethodException | IllegalAccessException e)
+        {
+            throw new IllegalStateException("Internal error", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <R> MethodAccess<R> getMethodAccess(MethodHandle mh, boolean isStatic)
+    {
+        if (isStatic)
+        {
+            mh = MethodHandles.dropArguments(mh, 0, Object.class);
+        }
+        mh = mh.asType(mh.type().generic());
+        mh = mh.asSpreader(Object[].class, mh.type().parameterCount() - 1);
+        final MethodHandle mhF = mh;
+
+        // cannot use MethodHandleProxies here, because they have a bug regarding default methods with varargs
+        return (instance, args) -> {
+            try
+            {
+                return (R) (Object) mhF.invokeExact(instance, args);
+            }
+            catch (Throwable e)
+            {
+                throw new RuntimeException(e);
+            }
+        };
     }
 
     @SuppressWarnings("unchecked")

@@ -46,6 +46,7 @@ def testTasks = javaVersionsToTest.collect(version -> {
         }
         jvmArgs '-XX:+IgnoreUnrecognizedVMOptions'
         jvmArgs '--add-opens=java.base/sun.security.util=ALL-UNNAMED'
+        jvmArgs '--add-opens=java.base/java.util.jar=ALL-UNNAMED'
     }
 })
 
