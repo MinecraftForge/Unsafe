@@ -1,91 +1,81 @@
 plugins {
-    id 'org.ajoberstar.reckon' version '0.9.0'
-    id 'org.ajoberstar.grgit' version '3.0.0'
-    id 'com.github.ben-manes.versions' version '0.20.0'
+    id 'com.github.ben-manes.versions' version '0.39.0'
+    id 'net.minecraftforge.gradleutils' version '2.+'
 }
-apply plugin: 'maven'
 apply plugin: 'maven-publish'
 apply plugin: 'java-library'
 apply plugin: 'eclipse'
-apply plugin: 'jacoco'
 
 group 'net.minecraftforge'
 
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
-
-jacoco {
-    toolVersion = '0.8.2'
-}
-
-reckon {
-    scopeFromProp()
-    stageFromProp('milestone', 'rc', 'final')
-}
-
-reckonTagCreate.dependsOn check
-
-dependencyUpdates.resolutionStrategy {
-    componentSelection { rules ->
-        rules.all { ComponentSelection selection ->
-            boolean rejected = ['alpha', 'beta', 'rc', 'cr', 'm', 'preview'].any { qualifier ->
-                selection.candidate.version ==~ /(?i).*[.-]${qualifier}[.\d-]*/
-            }
-            if (rejected) {
-                selection.reject('Release candidate')
-            }
-        }
-    }
-}
-
-test {
-    useJUnitPlatform()
-}
-
-ext.antlr = [
-        grammarpackage: 'net.minecraftforge.accesstransformer.generated',
-        antlrSource: 'src/main/antlr4',
-        destinationDir: "src/generated-sources/java"
-]
-
+version = gradleutils.getTagOffsetVersion()
+logger.lifecycle('Version: ' + version);
 
 ext.sharedManifest = manifest {
     attributes(['Specification-Title': 'unsafe',
-                'Specification-Vendor': 'Forge',
-                'Specification-Version': '1', // Currently version 1 of the accesstransformer specification
+                'Specification-Vendor': 'forge',
+                'Specification-Version': '1',
                 'Implementation-Title': project.name,
-                'Implementation-Version': "${version}+${System.getenv("BUILD_NUMBER")?:0}+${grgit.head().abbreviatedId}",
-                'Implementation-Vendor': 'Forge',
-                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-                'Git-Commit': grgit.head().abbreviatedId,
-                'Git-Branch': grgit.branch.current().getName() ],
+                'Implementation-Version': "${project.version}+${System.getenv('BUILD_NUMBER')?:0}+${gradleutils.gitInfo.branch}.${gradleutils.gitInfo.abbreviatedId}",
+                'Implementation-Vendor' :'forge',
+                'Implementation-Timestamp': java.time.Instant.now().toString(),
+                'Git-Commit': gradleutils.gitInfo.abbreviatedId,
+                'Git-Branch': gradleutils.gitInfo.branch,
+                'Build-Number': "${System.getenv('BUILD_NUMBER')?:0}" ],
             'net/minecraftforge/fml/unsafe/')
 }
 
-
-task sourcesJar(type: Jar) {
-    archiveClassifier = 'sources'
-    from sourceSets.main.allSource
+jar {
+    manifest = project.java.manifest {
+        from sharedManifest
+    }
 }
 
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(8)
+    withSourcesJar()
+}
+
+def javaVersionsToTest = [8, 11, 17]
+
+def testTasks = javaVersionsToTest.collect(version -> {
+    return task("testsOn$version", type: Test) {
+        useJUnitPlatform()
+        javaLauncher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(version)
+        }
+        jvmArgs '-XX:+IgnoreUnrecognizedVMOptions'
+        jvmArgs '--add-opens=java.base/sun.security.util=ALL-UNNAMED'
+    }
+})
+
+test {
+    dependsOn(testTasks)
+}
 
 repositories {
     mavenCentral()
     maven {
         name = 'forge'
-        url = 'http://files.minecraftforge.net/maven'
+        url = 'https://maven.minecraftforge.net/'
     }
 }
 
 dependencies {
-    testImplementation('org.junit.jupiter:junit-jupiter-api:5.3.+')
-    testImplementation('org.powermock:powermock-core:2.0+')
-    testRuntime('org.junit.jupiter:junit-jupiter-engine:5.3.+')
-    implementation('org.apache.logging.log4j:log4j-api:2.11.+')
-    implementation('org.apache.logging.log4j:log4j-core:2.11.+')
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.7.+'
 }
 
+def isNonStable = { String version ->
+    def stableKeyword = ['RELEASE', 'FINAL', 'GA'].any { it -> version.toUpperCase().contains(it) }
+    def regex = /^[0-9,.v-]+(-r)?$/
+    return !stableKeyword && !(version ==~ regex)
+}
 
+dependencyUpdates {
+    rejectVersionIf {
+        isNonStable(it.candidate.version)
+    }
+}
 
 artifacts {
     archives jar
@@ -96,7 +86,6 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.java
-            artifact sourcesJar
             pom {
                 name = 'Unsafe'
                 description = 'Unsafe hacks for forge'
@@ -127,12 +116,6 @@ publishing {
         }
     }
     repositories {
-        maven {
-            credentials {
-                username project.properties.forgeMavenUser?:'fake'
-                password project.properties.forgeMavenPassword?:'news'
-            }
-            url 'http://files.minecraftforge.net/maven/manage/upload'
-        }
+        maven gradleutils.getPublishingForgeMaven()
     }
 }
