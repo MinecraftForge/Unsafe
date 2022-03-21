@@ -84,26 +84,6 @@ public class UnsafeHacks
         return getMethodAccess(lookup.findConstructor(clazz, methodType(void.class, argumentTypes)), true);
     }
 
-    private static Object methodAccessBouncer(MethodHandle mh, Object[] args, Object instance) throws Throwable
-    {
-        return mh.invokeExact(instance, args);
-    }
-
-    private static final MethodHandle METHOD_ACCESS_BOUNCER;
-    static {
-        try
-        {
-            METHOD_ACCESS_BOUNCER = MethodHandles.lookup().findStatic(
-                    UnsafeHacks.class, "methodAccessBouncer",
-                    methodType(Object.class, MethodHandle.class, Object[].class, Object.class)
-            );
-        }
-        catch (NoSuchMethodException | IllegalAccessException e)
-        {
-            throw new IllegalStateException("Internal error", e);
-        }
-    }
-
     @SuppressWarnings("unchecked")
     private static <R> MethodAccess<R> getMethodAccess(MethodHandle mh, boolean isStatic)
     {
