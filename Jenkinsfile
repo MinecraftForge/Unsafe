@@ -3,7 +3,7 @@
 pipeline {
     agent {
         docker {
-            image 'gradlewrapper:latest'
+            image 'gradle:7.5.0-jdk8'
             args '-v gradlecache:/gradlecache'
         }
     }
