@@ -1,138 +1,106 @@
 plugins {
-    id 'org.ajoberstar.reckon' version '0.9.0'
-    id 'org.ajoberstar.grgit' version '3.0.0'
-    id 'com.github.ben-manes.versions' version '0.20.0'
-}
-apply plugin: 'maven'
-apply plugin: 'maven-publish'
-apply plugin: 'java-library'
-apply plugin: 'eclipse'
-apply plugin: 'jacoco'
-
-group 'net.minecraftforge'
-
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
-
-jacoco {
-    toolVersion = '0.8.2'
+    id 'org.cadixdev.licenser' version '0.6.1'
+    id 'maven-publish'
+    id 'java'
+    id 'java-library'
+    id 'eclipse'
+    id 'net.minecraftforge.gradleutils' version '2.0.11'
 }
 
-reckon {
-    scopeFromProp()
-    stageFromProp('milestone', 'rc', 'final')
-}
+group = 'net.minecraftforge'
 
-reckonTagCreate.dependsOn check
+version = gradleutils.tagOffsetVersion
+println('Version: ' + version)
 
-dependencyUpdates.resolutionStrategy {
-    componentSelection { rules ->
-        rules.all { ComponentSelection selection ->
-            boolean rejected = ['alpha', 'beta', 'rc', 'cr', 'm', 'preview'].any { qualifier ->
-                selection.candidate.version ==~ /(?i).*[.-]${qualifier}[.\d-]*/
-            }
-            if (rejected) {
-                selection.reject('Release candidate')
-            }
-        }
-    }
+license {
+    header project.file('LICENSE-header.txt')
+    include 'net/minecraftforge/**/*.java'
+    newLine false
 }
 
 test {
     useJUnitPlatform()
 }
 
-ext.antlr = [
-        grammarpackage: 'net.minecraftforge.accesstransformer.generated',
-        antlrSource: 'src/main/antlr4',
-        destinationDir: "src/generated-sources/java"
-]
-
-
-ext.sharedManifest = manifest {
-    attributes(['Specification-Title': 'unsafe',
-                'Specification-Vendor': 'Forge',
-                'Specification-Version': '1', // Currently version 1 of the accesstransformer specification
-                'Implementation-Title': project.name,
-                'Implementation-Version': "${version}+${System.getenv("BUILD_NUMBER")?:0}+${grgit.head().abbreviatedId}",
-                'Implementation-Vendor': 'Forge',
-                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-                'Git-Commit': grgit.head().abbreviatedId,
-                'Git-Branch': grgit.branch.current().getName() ],
-            'net/minecraftforge/fml/unsafe/')
-}
-
-
-task sourcesJar(type: Jar) {
-    archiveClassifier = 'sources'
-    from sourceSets.main.allSource
-}
-
-
-repositories {
-    mavenCentral()
-    maven {
-        name = 'forge'
-        url = 'http://files.minecraftforge.net/maven'
+// If we are being told a specific vendor then we are probably being run in parallel
+if (project.hasProperty('javaVendor') && project.hasProperty('javaVersion')) {
+    test.javaLauncher.set(javaToolchains.launcherFor {
+        it.vendor.set(JvmVendorSpec."${project.property('javaVendor').toUpperCase(Locale.ROOT)}" as JvmVendorSpec)
+        it.languageVersion.set(JavaLanguageVersion.of(project.property('javaVersion') as int))
+        it.implementation.set(JvmImplementation.VENDOR_SPECIFIC)
+    })
+} else {
+    def VALID_VMS = [
+        'Adoptium': [8, 11,     16, 17, 18, 19, 20, 21],
+        'Amazon':   [8, 11, 15, 16, 17, 18, 19, 20, 21],
+        'Azul':     (8..21),
+        'BellSoft': [8] + (11..21),
+        'Graal_VM': [8, 11,     16, 17,     19, 20, 21],
+        'IBM':      [8, 11,     16, 17, 18, 19, 20    ],
+        'SAP':      (11..20)
+    ]
+    VALID_VMS.each { javaVendor, javaVersions ->
+        javaVersions.each { javaVersion ->
+            def task = tasks.register("test${javaVendor}${javaVersion}", Test) {     
+                useJUnitPlatform()       
+                javaLauncher.set(javaToolchains.launcherFor {
+                    it.vendor.set(JvmVendorSpec."${javaVendor.toUpperCase(Locale.ROOT)}" as JvmVendorSpec)
+                    it.languageVersion.set(JavaLanguageVersion.of(javaVersion))
+                    it.implementation.set(JvmImplementation.VENDOR_SPECIFIC)
+                })
+            }
+            test.dependsOn(task)
+        }
     }
 }
 
-dependencies {
-    testImplementation('org.junit.jupiter:junit-jupiter-api:5.3.+')
-    testImplementation('org.powermock:powermock-core:2.0+')
-    testRuntime('org.junit.jupiter:junit-jupiter-engine:5.3.+')
-    implementation('org.apache.logging.log4j:log4j-api:2.11.+')
-    implementation('org.apache.logging.log4j:log4j-core:2.11.+')
+compileJava {
+    options.encoding = 'UTF-8'
 }
 
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(8)
+    withSourcesJar()
+}
 
+jar {
+    manifest {
+        attributes([
+            'Automatic-Module-Name': 'net.minecraftforge.unsafe'
+        ] as LinkedHashMap)
+        attributes([
+            'Specification-Title':    'unsafe',
+            'Specification-Vendor':   'Forge',
+            'Specification-Version':  gradleutils.gitInfo.tag,
+            'Implementation-Title':   project.name,
+            'Implementation-Version': project.version,
+            'Implementation-Vendor': 'Forge'
+        ] as LinkedHashMap, 'net/minecraftforge/unsafe/')
+    }
+}
 
-artifacts {
-    archives jar
-    archives sourcesJar
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation(libs.junit.api)
+    testRuntimeOnly(libs.junit.engine)
 }
 
 publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.java
-            artifact sourcesJar
             pom {
                 name = 'Unsafe'
-                description = 'Unsafe hacks for forge'
+                description = 'Unsafe hacks'
                 url = 'https://github.com/MinecraftForge/Unsafe'
-                scm {
-                    url = 'https://github.com/MinecraftForge/Unsafe'
-                    connection = 'scm:git:git://github.com/MinecraftForge/Unsafe.git'
-                    developerConnection = 'scm:git:git@github.com:MinecraftForge/Unsafe.git'
-                }
-                issueManagement {
-                    system = 'github'
-                    url = 'https://github.com/MinecraftForge/Unsafe/issues'
-                }
-
-                licenses {
-                    license {
-                        name = 'LGPLv2.1'
-                    }
-                }
-
-                developers {
-                    developer {
-                        id = 'cpw'
-                        name = 'cpw'
-                    }
-                }
+                licenses{ license { name = 'LGPLv2.1' } }
             }
         }
     }
     repositories {
-        maven {
-            credentials {
-                username project.properties.forgeMavenUser?:'fake'
-                password project.properties.forgeMavenPassword?:'news'
-            }
-            url 'http://files.minecraftforge.net/maven/manage/upload'
-        }
+        maven gradleutils.publishingForgeMaven
     }
 }

@@ -1,4 +1,24 @@
-# Created by .ignore support plugin (hsz.mobi)
-/.idea/
-/.gradle/
-/build/
+#eclipse
+/bin
+.settings
+.classpath
+*.project
+
+#In case people make their workspace in the repo
+/eclipse/
+
+#idea
+/.idea
+/*/out
+/classes
+*.iml
+
+# We however WANT the ide folder as it has tempaltes/configs for developing Forge.
+!ide/**
+
+#gradle
+/build
+/.gradle
+
+# Test Builds
+/repo/

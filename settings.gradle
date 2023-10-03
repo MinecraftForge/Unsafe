@@ -1,2 +1,25 @@
-rootProject.name = 'unsafe'
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenLocal()
+        maven { url = 'https://maven.minecraftforge.net/' }
+    }
+}
 
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.6.0'
+}
+
+dependencyResolutionManagement {
+    versionCatalogs {
+        libs {
+			version('junit', '5.10.0')
+			library('junit-api', 'org.junit.jupiter', 'junit-jupiter-api').versionRef('junit')
+			library('junit-engine', 'org.junit.jupiter', 'junit-jupiter-engine').versionRef('junit')
+			library('junit-platform-launcher', 'org.junit.platform:junit-platform-launcher:1.10.0')
+			bundle('junit-runtime', ['junit-engine', 'junit-platform-launcher']) // Force Gradle to load the JUnit Platform Launcher from the module-path
+        }
+    }
+}
+
+rootProject.name = 'unsafe'
