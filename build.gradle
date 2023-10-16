@@ -29,27 +29,47 @@ if (project.hasProperty('javaVendor') && project.hasProperty('javaVersion')) {
         it.languageVersion.set(JavaLanguageVersion.of(project.property('javaVersion') as int))
         it.implementation.set(JvmImplementation.VENDOR_SPECIFIC)
     })
-} else {
+} else if (!project.hasProperty('disable_bulk_tests')) {
+    configurations {
+        groovyScript
+    }
+
+    dependencies {
+        groovyScript 'org.apache.ivy:ivy:2.4.0'
+        groovyScript 'org.codehaus.groovy:groovy-all:3.0.19'
+    }
+    
+    tasks.register('collectTests', JavaExec) {
+        classpath = configurations.groovyScript
+        main = 'groovy.ui.GroovyMain'
+        args 'aggregate-junit-tests.groovy'
+    }
+    
     def VALID_VMS = [
-        'Adoptium': [8, 11,     16, 17, 18, 19, 20, 21],
-        'Amazon':   [8, 11, 15, 16, 17, 18, 19, 20, 21],
-        'Azul':     (8..21),
-        'BellSoft': [8] + (11..21),
-        'Graal_VM': [8, 11,     16, 17,     19, 20, 21],
-        'IBM':      [8, 11,     16, 17, 18, 19, 20    ],
-        'SAP':      (11..20)
+        'Adoptium':  [8, 11,     16, 17, 18, 19, 20, 21],
+        'Amazon':    [8, 11, 15, 16, 17, 18, 19, 20, 21],
+        'Azul':      (8..21),
+        'BellSoft':  [8] + (11..21),
+        'Graal_VM':  [8, 11,     16, 17,     19, 20, 21],
+        'IBM':       [8, 11,     16, 17, 18, 19, 20    ],
+        'Microsoft': [   11,     16, 17,             21],
+        'Oracle':    (8..21),
+        'SAP':       (11..20)
     ]
     VALID_VMS.each { javaVendor, javaVersions ->
         javaVersions.each { javaVersion ->
             def task = tasks.register("test${javaVendor}${javaVersion}", Test) {     
-                useJUnitPlatform()       
+                useJUnitPlatform()
                 javaLauncher.set(javaToolchains.launcherFor {
                     it.vendor.set(JvmVendorSpec."${javaVendor.toUpperCase(Locale.ROOT)}" as JvmVendorSpec)
                     it.languageVersion.set(JavaLanguageVersion.of(javaVersion))
                     it.implementation.set(JvmImplementation.VENDOR_SPECIFIC)
                 })
+                reports.html.destination = file("$buildDir/test_artifacts/test-reports-${javaVendor}-${javaVersion}/")
+                reports.junitXml.destination = file("$buildDir/test_artifacts/test-results-${javaVendor}-${javaVersion}/")
             }
             test.dependsOn(task)
+            collectTests.mustRunAfter(task)
         }
     }
 }
