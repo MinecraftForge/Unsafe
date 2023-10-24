@@ -139,4 +139,7 @@ public class UnsafeHacks {
     private static <T> T cast(Object inst) {
         return (T)inst;
     }
+
+    //TODO: [Unsafe] Add module-info.java using https://github.com/beryx/badass-jar-plugin So that modular projects that consume us can get proper encapsulation and we mark that we need jdk.unsupported
+    //TODO: [Unsafe] Expand API to facilitate better Whitebox testing, addOpens(Module closed, Module reader), get/invoke methods?
 }

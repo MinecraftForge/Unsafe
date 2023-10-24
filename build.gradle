@@ -109,15 +109,14 @@ dependencies {
 }
 
 publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            from components.java
-            pom {
-                name = 'Unsafe'
-                description = 'Unsafe hacks'
-                url = 'https://github.com/MinecraftForge/Unsafe'
-                licenses{ license { name = 'LGPLv2.1' } }
-            }
+    publications.register('mavenJava', MavenPublication) {
+        from components.java
+        artifactId = 'unsafe'
+        pom {
+            name = 'Unsafe'
+            description = 'Unsafe hacks'
+            url = 'https://github.com/MinecraftForge/Unsafe'
+            licenses{ license { name = 'LGPLv2.1' } }
         }
     }
     repositories {
